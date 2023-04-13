@@ -1,0 +1,123 @@
+<html>
+
+<head>
+    <style>
+        #chatContainer {
+            height: 100%;
+            width: 100%
+        }
+
+        #chat {
+            width: 100%;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 30px;
+            padding: 0;
+            margin: 0
+        }
+
+        #messages {
+            height: calc(100% - 35px);
+            overflow-y: scroll;
+            width: calc(100% - 100px);
+            position: absolute;
+            top: 0;
+            left: 0
+        }
+
+        #message {
+            width: calc(100% - 70px)
+        }
+
+        #nicks {
+            width: 100px;
+            height: 100%;
+            position: absolute;
+            right: 0;
+            padding: 0;
+            margin: 0
+        }
+    </style>
+</head>
+
+<body>
+    <dialog id="loading" style="display: none;">Connecting</dialog>
+    <form id="nameForm">
+        <label>Enter you name: <input name="name" type="text" /></label>
+        <input type="submit" />
+    </form>
+    <div id="chatContainer" style="display: none">
+        <div id="messages">
+        </div>
+        <ul id="nicks">
+
+        </ul>
+        <form id="chat">
+            <input placeholder="Type a message..." autocomplete="off" id="message" name="message" type="text" />
+            <input type="submit" value="Send" style="width: 60px" />
+        </form>
+    </div>
+    <script>
+        const nameForm = document.getElementById('nameForm');
+        nameForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const loading = document.getElementById('loading');
+            nameForm.style.display = 'none';
+            const nick = new FormData(nameForm).get('name');
+            loading.style.display = 'block';
+            (function connect() {
+                const socket = new WebSocket('ws://' + window.location.host + ':8081/' + nick, ["chat"]);
+
+                socket.addEventListener('close', evt => {
+                    console.log('websocket closed')
+                    loading.style.display = 'block';
+                    setTimeout(() => {
+                        connect()
+                    }, 5000)
+                });
+                socket.addEventListener("open", (event) => {
+                    const chatContainer = document.getElementById('chatContainer');
+                    loading.style.display = 'none';
+                    chatContainer.style.display = 'block';
+                    document.getElementById('chat').addEventListener('submit', e => {
+                        e.preventDefault();
+                        const fd = new FormData(e.target)
+                        socket.send(new Date().getHours() + ':' + new Date().getMinutes() + ' ' + nick + ': ' + fd.get('message'));
+                        e.target.reset();
+                    })
+                    const messagesContainer = document.getElementById('messages');
+                    const nicksContainer = document.getElementById('nicks');
+                    let scrolled = false;
+                    socket.addEventListener('message', (event) => {
+                        console.log(event.data)
+                        const data = JSON.parse(event.data);
+                        if (data.type === 'message') {
+                            if (!scrolled && messagesContainer.offsetHeight !== messagesContainer.scrollHeight) {
+                                var autoScroll = true
+                                scrolled = true;
+                            } else {
+                                var autoScroll = Math.round(messagesContainer.scrollTop) === (messagesContainer.scrollHeight - messagesContainer.offsetHeight)
+                            }
+                            const messageContainer = messagesContainer.appendChild(document.createElement('div'))
+
+                            messageContainer.textContent = data.data;
+                            if (autoScroll) {
+                                messagesContainer.scrollTo(0, messagesContainer.scrollHeight)
+                            }
+                        } else if (data.type === 'nicks') {
+                            nicks.innerHTML = '';
+                            data.data.forEach(nick => {
+                                const li = nicks.appendChild(document.createElement('li'));
+                                li.textContent = nick;
+                            })
+                        }
+                    })
+                })
+            })()
+        })
+
+    </script>
+</body>
+
+</html>
